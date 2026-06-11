@@ -295,7 +295,7 @@ function ProduitRow({ arrivage, onValidate, onDelete, onOuvreRapport }: { arriva
 }
 
 function FournisseurBlock({ fournisseur, produits, onValidate, onDelete, onOuvreRapport }: any) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   return (
     <div style={{ background: "#fff", borderRadius: 14, marginBottom: 10, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
       <div onClick={() => setOpen(!open)} style={{ padding: "11px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", background: "#faf8f3", borderBottom: open ? "1px solid #e8e0d0" : "none" }}>
@@ -312,7 +312,8 @@ function FournisseurBlock({ fournisseur, produits, onValidate, onDelete, onOuvre
 }
 
 function DateBlock({ date, arrivages, onValidate, onDelete, onOuvreRapport }: any) {
-  const [open, setOpen] = useState(true);
+  const today = new Date().toLocaleDateString("fr-FR");
+  const [open, setOpen] = useState(date === today);
   const byFournisseur: Record<string, any[]> = {};
   arrivages.forEach((a: any) => { if (!byFournisseur[a.fournisseur]) byFournisseur[a.fournisseur] = []; byFournisseur[a.fournisseur].push(a); });
   return (
@@ -1871,7 +1872,6 @@ _PDF joint_`;
             <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
               <StatCardArr label="À traiter" value={arrivages.filter(a=>a.statut==="en attente").length} color="#d97706" />
               <StatCardArr label="Validés" value={arrivages.filter(a=>a.statut==="validé").length} color="#1a6b3a" />
-              <StatCardArr label="Litiges" value={arrivages.filter(a=>a.statut==="refusé"||a.statut==="sous réserve").length} color="#dc2626" />
             </div>
             {/* Actions */}
             <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
@@ -1980,49 +1980,106 @@ _PDF joint_`;
         {/* ══ VUE HISTORIQUE ARRIVAGES ══ */}
         {pageMode === "historique_arr" && vue !== "form" && vue !== "historique" && (
           <div className="fade-up">
-            <p style={{ fontWeight: 700, fontSize: 12, color: "#6b7280", margin: "0 0 12px", textTransform: "uppercase", letterSpacing: "0.8px", fontFamily: "'Syne', sans-serif" }}>📁 Historique · {arrivages.length} arrivages</p>
-            <input value={histSearchArr} onChange={e=>setHistSearchArr(e.target.value)} placeholder="🔍 Rechercher..." style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #e8e0d0", borderRadius: 10, fontSize: 14, outline: "none", marginBottom: 14, boxSizing: "border-box" as const }} />
-            {arrivages.filter(a => !histSearchArr || `${a.produit} ${a.fournisseur}`.toLowerCase().includes(histSearchArr.toLowerCase())).map(a => {
-              const rapport = rapports.find(r => r.arrivage_id === a.id);
-              return (
-                <div key={a.id} style={{ background: "#fff", borderRadius: 16, boxShadow: "0 2px 16px rgba(0,0,0,0.05)", marginBottom: 12, overflow: "hidden", borderLeft: `4px solid ${a.statut==="validé"?"#27ae60":a.statut==="refusé"?"#dc2626":a.statut==="sous réserve"?"#d97706":"#d97706"}` }}>
-                  <div style={{ padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div>
-                      <p style={{ margin: "0 0 5px", fontWeight: 700, fontSize: 14, color: "#1a2e1a", fontFamily: "'Syne', sans-serif" }}>{a.produit}{a.variete?` · ${a.variete}`:""}{a.hors_liste?<span style={{ marginLeft:8, fontSize:10, background:"#fff3e0", color:"#e65100", padding:"2px 7px", borderRadius:10, fontWeight:600 }}>Hors liste</span>:null}</p>
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                        <PillArr>🏭 {a.fournisseur}</PillArr>
-                        <PillArr>📦 {a.quantite} {a.unite}</PillArr>
-                        {a.lot_interne&&<PillArr>🔖 {a.lot_interne}</PillArr>}
-                        {a.origine&&<PillArr>🌍 {a.origine}</PillArr>}
-                        <span style={{ fontSize:11, color:"#6b7280", alignSelf:"center" }}>📅 {a.date}</span>
+            <p style={{ fontWeight: 700, fontSize: 12, color: "#6b7280", margin: "0 0 12px", textTransform: "uppercase", letterSpacing: "0.8px", fontFamily: "'Syne', sans-serif" }}>
+              📁 Historique · {arrivages.filter(a => a.date !== new Date().toLocaleDateString("fr-FR")).length} arrivages
+            </p>
+            <input value={histSearchArr} onChange={e=>setHistSearchArr(e.target.value)} placeholder="🔍 Produit, fournisseur, lot..." style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #e8e0d0", borderRadius: 10, fontSize: 14, outline: "none", marginBottom: 14, boxSizing: "border-box" as const }} />
+            {arrivages
+              .filter(a => a.date !== new Date().toLocaleDateString("fr-FR"))
+              .filter(a => !histSearchArr || `${a.produit} ${a.fournisseur} ${a.lot_interne}`.toLowerCase().includes(histSearchArr.toLowerCase()))
+              .map(a => {
+                const rapport = rapports.find(r => r.arrivage_id === a.id);
+                const borderColor = a.statut==="validé" ? "#27ae60" : a.statut==="refusé" ? "#dc2626" : a.statut==="sous réserve" ? "#d97706" : "#d97706";
+                return (
+                  <div key={a.id} style={{ background: "#fff", borderRadius: 16, boxShadow: "0 2px 16px rgba(0,0,0,0.05)", marginBottom: 12, overflow: "hidden", borderLeft: `4px solid ${borderColor}` }}>
+
+                    {/* Header arrivage */}
+                    <div style={{ padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: "0 0 5px", fontWeight: 700, fontSize: 14, color: "#1a2e1a", fontFamily: "'Syne', sans-serif" }}>
+                          {a.produit}{a.variete ? ` · ${a.variete}` : ""}
+                          {a.hors_liste && <span style={{ marginLeft: 8, fontSize: 10, background: "#fff3e0", color: "#e65100", padding: "2px 7px", borderRadius: 10, fontWeight: 600 }}>Hors liste</span>}
+                          {a.destruction && <span style={{ marginLeft: 8, fontSize: 10, background: "#fef2f2", color: "#dc2626", padding: "2px 7px", borderRadius: 10, fontWeight: 600 }}>🗑 Destruction demandée</span>}
+                        </p>
+                        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                          <PillArr>🏭 {a.fournisseur}</PillArr>
+                          <PillArr>📦 {a.quantite} {a.unite}</PillArr>
+                          {a.lot_interne && <PillArr>🔖 {a.lot_interne}</PillArr>}
+                          {a.origine && <PillArr>🌍 {a.origine}</PillArr>}
+                          <span style={{ fontSize: 11, color: "#6b7280", alignSelf: "center" }}>📅 {a.date}</span>
+                        </div>
                       </div>
+                      <BadgeArrivage status={a.statut} />
                     </div>
-                    <BadgeArrivage status={a.statut} />
+
+                    {/* Rapport rattaché */}
+                    {rapport && (
+                      <div style={{ borderTop: "1px solid #e8e0d0", padding: "10px 18px", background: "#faf8f3", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#1a2e1a" }}>📋 {rapport.numeroRapport}</span>
+                        {rapport.notes?.qualite > 0 && <span style={{ fontSize: 12, color: NOTE_COLORS[rapport.notes.qualite], fontWeight: 700, background: NOTE_COLORS[rapport.notes.qualite]+"15", padding: "2px 8px", borderRadius: 20 }}>Note {rapport.notes.qualite}/5 — {NOTE_LABELS[rapport.notes.qualite]}</span>}
+                        {rapport.temperature && <span style={{ fontSize: 12, color: "#1d4ed8" }}>🌡 {rapport.temperature}°C</span>}
+                        {rapport.score && <ScoreCircle score={rapport.score} />}
+                        {rapport.observations && <span style={{ fontSize: 12, color: "#6b7280", fontStyle: "italic" }}>"{rapport.observations}"</span>}
+                        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                          <button onClick={() => downloadPDF(rapport)} style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid #e8e0d0", background: "#faf8f3", color: "#8a6f2e", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>📤 PDF</button>
+                          <button onClick={() => partagerWhatsApp(rapport)} style={{ padding: "5px 12px", borderRadius: 8, border: "none", background: "#25d366", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>WhatsApp</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Litige rattaché */}
+                    {a.litige && (
+                      <div style={{ borderTop: `1px solid ${a.litige.type==="refusé"?"#fca5a5":"#fcd34d"}`, padding: "10px 18px", background: a.litige.type==="refusé"?"#fef2f2":"#fffbeb", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: a.litige.type==="refusé"?"#dc2626":"#d97706" }}>{a.litige.type==="refusé"?"❌ Litige refus":"⚠️ Litige réserve"}</span>
+                        <span style={{ fontSize: 12, color: a.litige.type==="refusé"?"#dc2626":"#d97706" }}>{a.litige.raison}</span>
+                        {a.litige.pct && <span style={{ fontSize: 11, color: "#6b7280" }}>{a.litige.pct}% concerné</span>}
+                        <span style={{ marginLeft: "auto", fontSize: 11, background: a.litige.statut==="ouvert"?"#fef2f2":"#f0fdf4", color: a.litige.statut==="ouvert"?"#dc2626":"#1a6b3a", padding: "2px 8px", borderRadius: 20, fontWeight: 600, border: `1px solid ${a.litige.statut==="ouvert"?"#fca5a5":"#d4edda"}` }}>{a.litige.statut==="ouvert"?"● Ouvert":"✓ Clôturé"}</span>
+                      </div>
+                    )}
+
+                    {/* Destruction lot */}
+                    {a.destruction && (
+                      <div style={{ borderTop: "1px solid #fca5a5", padding: "10px 18px", background: "#fef2f2", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "#dc2626" }}>🗑 Destruction lot</span>
+                        <span style={{ fontSize: 12, color: "#dc2626" }}>{a.destruction.quantite} {a.unite} — {a.destruction.raison}</span>
+                        <span style={{ fontSize: 11, color: "#6b7280" }}>Demandé le {a.destruction.date}</span>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div style={{ borderTop: "1px solid #f0f0f0", padding: "10px 16px", display: "flex", gap: 8 }}>
+                      {!rapport && (
+                        <button onClick={() => ouvrirRapportDepuisArrivage(a)}
+                          style={{ padding: "8px 16px", borderRadius: 10, border: "1.5px solid #e8e0d0", background: "#faf8f3", color: "#c8a84b", cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: "'Syne', sans-serif" }}>
+                          📋 Faire un rapport
+                        </button>
+                      )}
+                      {!a.destruction && (
+                        <button onClick={async () => {
+                          const qte = window.prompt(`Quantité à détruire (sur ${a.quantite} ${a.unite}) :`);
+                          if (!qte) return;
+                          const raison = window.prompt("Raison de la destruction :");
+                          if (!raison) return;
+                          await update(ref(db, `arrivages/${a.id}`), {
+                            destruction: { quantite: qte, raison, date: new Date().toLocaleDateString("fr-FR"), demandePar: user?.displayName || user?.email || "—" }
+                          });
+                          showToast("🗑 Destruction enregistrée");
+                        }}
+                          style={{ padding: "8px 16px", borderRadius: 10, border: "1.5px solid #fca5a5", background: "#fef2f2", color: "#dc2626", cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: "'Syne', sans-serif" }}>
+                          🗑 Demander destruction
+                        </button>
+                      )}
+                    </div>
+
                   </div>
-                  {rapport && (
-                    <div style={{ borderTop: "1px solid #e8e0d0", padding: "10px 18px", background: "#faf8f3", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-                      <span style={{ fontSize:12, fontWeight:600, color:"#1a2e1a" }}>📋 {rapport.numeroRapport}</span>
-                      {rapport.notes?.qualite>0&&<span style={{ fontSize:12, color:NOTE_COLORS[rapport.notes.qualite], fontWeight:700, background:NOTE_COLORS[rapport.notes.qualite]+"15", padding:"2px 8px", borderRadius:20 }}>Note {rapport.notes.qualite}/5 — {NOTE_LABELS[rapport.notes.qualite]}</span>}
-                      {rapport.temperature&&<span style={{ fontSize:12, color:"#1d4ed8" }}>🌡 {rapport.temperature}°C</span>}
-                      {rapport.score&&<ScoreCircle score={rapport.score} />}
-                      {rapport.observations&&<span style={{ fontSize:12, color:"#6b7280", fontStyle:"italic" }}>"{rapport.observations}"</span>}
-                      <div style={{ marginLeft:"auto", display:"flex", gap:6 }}>
-                        <button onClick={()=>downloadPDF(rapport)} style={{ padding:"5px 12px", borderRadius:8, border:"1px solid #e8e0d0", background:"#faf8f3", color:"#8a6f2e", cursor:"pointer", fontSize:12, fontWeight:600 }}>📤 PDF</button>
-                        <button onClick={()=>partagerWhatsApp(rapport)} style={{ padding:"5px 12px", borderRadius:8, border:"none", background:"#25d366", color:"#fff", cursor:"pointer", fontSize:12, fontWeight:600 }}>WhatsApp</button>
-                      </div>
-                    </div>
-                  )}
-                  {a.litige && (
-                    <div style={{ borderTop:`1px solid ${a.litige.type==="refusé"?"#fca5a5":"#fcd34d"}`, padding:"10px 18px", background:a.litige.type==="refusé"?"#fef2f2":"#fffbeb", display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
-                      <span style={{ fontSize:12, fontWeight:700, color:a.litige.type==="refusé"?"#dc2626":"#d97706" }}>{a.litige.type==="refusé"?"❌ Litige refus":"⚠️ Litige réserve"}</span>
-                      <span style={{ fontSize:12, color:a.litige.type==="refusé"?"#dc2626":"#d97706" }}>{a.litige.raison}</span>
-                      {a.litige.pct&&<span style={{ fontSize:11, color:"#6b7280" }}>{a.litige.pct}% concerné</span>}
-                      <span style={{ marginLeft:"auto", fontSize:11, background:a.litige.statut==="ouvert"?"#fef2f2":"#f0fdf4", color:a.litige.statut==="ouvert"?"#dc2626":"#1a6b3a", padding:"2px 8px", borderRadius:20, fontWeight:600, border:`1px solid ${a.litige.statut==="ouvert"?"#fca5a5":"#d4edda"}` }}>{a.litige.statut==="ouvert"?"● Ouvert":"✓ Clôturé"}</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            {arrivages.filter(a => a.date !== new Date().toLocaleDateString("fr-FR")).length === 0 && (
+              <div style={{ textAlign: "center", padding: "3rem", background: "#f5f3ee", borderRadius: 20 }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>📁</div>
+                <p style={{ margin: 0, fontWeight: 700, color: "#6b7280", fontFamily: "'Syne', sans-serif" }}>Aucun arrivage dans l'historique</p>
+              </div>
+            )}
           </div>
         )}
 
