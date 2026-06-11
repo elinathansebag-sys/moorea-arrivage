@@ -116,125 +116,195 @@ const inputStyle = {
   outline:"none",fontFamily:"system-ui,sans-serif"
 };
 
-// ── AGRÉMENT INLINE PANEL ─────────────────────────────────────────────────────
-function AgrémentPanel({ arrivage, onSubmit, onCancel }) {
-  const [ctrl, setCtrl] = useState(INIT_CTRL);
-  const [decision, setDecision] = useState("");
-  const [ncType, setNcType] = useState("");
+// ── PRODUIT ROW (inline dans fournisseur) ────────────────────────────────────
+function ProduitRow({ arrivage, onValidate, onDelete }) {
+  const [qualite, setQualite] = useState(3);
+  const [tempOk, setTempOk] = useState(true);
+  const [poidsOk, setPoidsOk] = useState(true);
+  const [litige, setLitige] = useState(false);
   const [raison, setRaison] = useState("");
-  const [pct, setPct] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const canSubmit = decision === "conforme"
-    ? ctrl.qualite > 0
-    : ctrl.qualite > 0 && ncType && raison;
+  const handleValider = async () => {
+    setSaving(true);
+    const decision = litige ? "non_conforme" : "conforme";
+    const ncType = litige ? "sous réserve" : "";
+    const ctrl = { qualite, temperature: tempOk?"ok":"", poids_mesure: poidsOk?"ok":"", observations:"" };
+    await onValidate(arrivage, ctrl, decision, ncType, raison, "");
+    setSaving(false);
+  };
+
+  const statusColor = litige ? C.redText : qualite >= 4 ? C.green : qualite === 3 ? C.amberText : C.redText;
 
   return (
-    <div style={{background:"#fafffe",borderTop:`1px solid ${C.greenBorder}`,padding:"16px 20px"}}>
+    <div style={{background:"#fff",borderRadius:12,padding:"12px 16px",marginBottom:8,
+      border:`1.5px solid ${litige?C.redBorder:C.greenBorder}`,
+      borderLeft:`4px solid ${statusColor}`}}>
 
-      {/* Note qualité */}
-      <div style={{marginBottom:14}}>
-        <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.5px"}}>👁 Note qualité visuelle</p>
-        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-          {[1,2,3,4,5].map(n=><NoteBtn key={n} n={n} selected={ctrl.qualite} onChange={v=>setCtrl({...ctrl,qualite:v})}/>)}
-          {ctrl.qualite>0&&<span style={{fontSize:12,fontWeight:600,color:NOTE_COLORS[ctrl.qualite],marginLeft:4}}>{NOTE_LABELS[ctrl.qualite]}</span>}
-        </div>
-      </div>
-
-      {/* Température + Poids */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 14px",marginBottom:14}}>
-        <Field label="🌡 Température (°C)">
-          <input type="number" step="0.1" value={ctrl.temperature}
-            onChange={e=>setCtrl({...ctrl,temperature:e.target.value})}
-            placeholder="Ex : 4" style={inputStyle}/>
-        </Field>
-        <Field label="⚖️ Poids mesuré (kg)">
-          <input type="number" step="0.1" value={ctrl.poids_mesure}
-            onChange={e=>setCtrl({...ctrl,poids_mesure:e.target.value})}
-            placeholder="Ex : 5.2" style={inputStyle}/>
-        </Field>
-      </div>
-
-      {/* Décision */}
-      <div style={{marginBottom:14}}>
-        <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.5px"}}>📋 Décision</p>
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>{setDecision("conforme");setNcType("");}}
-            style={{flex:1,padding:"11px",borderRadius:12,cursor:"pointer",fontWeight:700,fontSize:13,
-              border:`2px solid ${decision==="conforme"?C.green:"#e5e7eb"}`,
-              background:decision==="conforme"?C.greenLight:"#fff",
-              color:decision==="conforme"?C.greenDark:"#9ca3af"}}>
-            ✅ Conforme
-          </button>
-          <button onClick={()=>setDecision("non_conforme")}
-            style={{flex:1,padding:"11px",borderRadius:12,cursor:"pointer",fontWeight:700,fontSize:13,
-              border:`2px solid ${decision==="non_conforme"?C.redText:"#e5e7eb"}`,
-              background:decision==="non_conforme"?C.red:"#fff",
-              color:decision==="non_conforme"?C.redText:"#9ca3af"}}>
-            ❌ Non conforme
-          </button>
-        </div>
-      </div>
-
-      {/* Non conforme → détails */}
-      {decision==="non_conforme"&&(
-        <div style={{background:C.red,border:`1px solid ${C.redBorder}`,borderRadius:12,
-          padding:"14px 16px",marginBottom:14}}>
-          <div style={{display:"flex",gap:8,marginBottom:10}}>
-            <button onClick={()=>setNcType("refusé")}
-              style={{flex:1,padding:"9px",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:12,
-                border:`2px solid ${ncType==="refusé"?C.redText:"#fca5a5"}`,
-                background:ncType==="refusé"?"#fca5a5":"#fff",color:C.redText}}>
-              ❌ Refus total
-            </button>
-            <button onClick={()=>setNcType("sous réserve")}
-              style={{flex:1,padding:"9px",borderRadius:10,cursor:"pointer",fontWeight:700,fontSize:12,
-                border:`2px solid ${ncType==="sous réserve"?C.amberText:"#fcd34d"}`,
-                background:ncType==="sous réserve"?"#fcd34d":"#fff",color:C.amberText}}>
-              ⚠️ Sous réserve
-            </button>
-          </div>
-          <Field label="Raison *">
-            <input value={raison} onChange={e=>setRaison(e.target.value)}
-              placeholder="Ex : Moisissures, casse, température hors norme..."
-              style={inputStyle}/>
-          </Field>
-          <Field label="% concerné">
-            <input type="number" min="0" max="100" value={pct}
-              onChange={e=>setPct(e.target.value)}
-              placeholder="Ex : 30" style={{...inputStyle,width:100}}/>
-          </Field>
-          <Field label="N° lot fournisseur">
-            <input value={ctrl.lot_fournisseur_litige}
-              onChange={e=>setCtrl({...ctrl,lot_fournisseur_litige:e.target.value})}
-              placeholder="Ex : 26032146" style={inputStyle}/>
-          </Field>
-          <div style={{background:"#fff3e0",border:"1px solid #ffcc80",borderRadius:8,
-            padding:"7px 10px",fontSize:12,color:"#e65100",fontWeight:600}}>
-            ⚡ Un litige sera automatiquement rattaché à cet arrivage
+      {/* Titre produit */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+        <div>
+          <p style={{margin:"0 0 3px",fontWeight:700,fontSize:13,color:C.text}}>{arrivage.produit}</p>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            <Pill>📦 {arrivage.quantite} {arrivage.unite}</Pill>
+            {arrivage.lot_interne&&<Pill>🔖 {arrivage.lot_interne}</Pill>}
+            {arrivage.origine&&<Pill>🌍 {arrivage.origine}</Pill>}
           </div>
         </div>
+        <button onClick={()=>onDelete(arrivage.id)}
+          style={{background:"transparent",border:`1px solid ${C.redBorder}`,color:C.redText,
+            borderRadius:8,padding:"3px 7px",cursor:"pointer",fontSize:11,flexShrink:0}}>🗑</button>
+      </div>
+
+      {/* Contrôles inline */}
+      <div style={{display:"grid",gridTemplateColumns:"auto 1fr 1fr auto",gap:"0 16px",alignItems:"center"}}>
+
+        {/* Note qualité */}
+        <div>
+          <p style={{margin:"0 0 4px",fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.5px"}}>👁 Qualité</p>
+          <div style={{display:"flex",gap:4}}>
+            {[1,2,3,4,5].map(n=>(
+              <button key={n} onClick={()=>setQualite(n)}
+                style={{width:28,height:28,borderRadius:7,cursor:"pointer",fontSize:11,fontWeight:qualite===n?700:400,
+                  border:`1.5px solid ${qualite===n?NOTE_COLORS[n]:"#e5e7eb"}`,
+                  background:qualite===n?NOTE_BG[n]:"#fff",
+                  color:qualite===n?NOTE_COLORS[n]:"#9ca3af"}}>
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Température */}
+        <div>
+          <p style={{margin:"0 0 4px",fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.5px"}}>🌡 Temp.</p>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>setTempOk(true)}
+              style={{padding:"5px 10px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:tempOk?700:400,
+                border:`1.5px solid ${tempOk?C.green:"#e5e7eb"}`,
+                background:tempOk?C.greenLight:"#fff",color:tempOk?C.greenDark:"#9ca3af"}}>
+              ✓ Ok
+            </button>
+            <button onClick={()=>setTempOk(false)}
+              style={{padding:"5px 10px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:!tempOk?700:400,
+                border:`1.5px solid ${!tempOk?C.redText:"#e5e7eb"}`,
+                background:!tempOk?C.red:"#fff",color:!tempOk?C.redText:"#9ca3af"}}>
+              ✗ Non
+            </button>
+          </div>
+        </div>
+
+        {/* Poids */}
+        <div>
+          <p style={{margin:"0 0 4px",fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.5px"}}>⚖️ Poids</p>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>setPoidsOk(true)}
+              style={{padding:"5px 10px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:poidsOk?700:400,
+                border:`1.5px solid ${poidsOk?C.green:"#e5e7eb"}`,
+                background:poidsOk?C.greenLight:"#fff",color:poidsOk?C.greenDark:"#9ca3af"}}>
+              ✓ Ok
+            </button>
+            <button onClick={()=>setPoidsOk(false)}
+              style={{padding:"5px 10px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:!poidsOk?700:400,
+                border:`1.5px solid ${!poidsOk?C.redText:"#e5e7eb"}`,
+                background:!poidsOk?C.red:"#fff",color:!poidsOk?C.redText:"#9ca3af"}}>
+              ✗ Non
+            </button>
+          </div>
+        </div>
+
+        {/* Litige */}
+        <div>
+          <p style={{margin:"0 0 4px",fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.5px"}}>⚠️ Litige</p>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>setLitige(false)}
+              style={{padding:"5px 10px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:!litige?700:400,
+                border:`1.5px solid ${!litige?C.green:"#e5e7eb"}`,
+                background:!litige?C.greenLight:"#fff",color:!litige?C.greenDark:"#9ca3af"}}>
+              ✓ Non
+            </button>
+            <button onClick={()=>setLitige(true)}
+              style={{padding:"5px 10px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:litige?700:400,
+                border:`1.5px solid ${litige?C.redText:"#e5e7eb"}`,
+                background:litige?C.red:"#fff",color:litige?C.redText:"#9ca3af"}}>
+              ✗ Oui
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Raison litige */}
+      {litige&&(
+        <input value={raison} onChange={e=>setRaison(e.target.value)}
+          placeholder="Raison du litige..."
+          style={{...inputStyle,marginTop:8,fontSize:13}}/>
       )}
 
-      <Field label="💬 Observations">
-        <input value={ctrl.observations} onChange={e=>setCtrl({...ctrl,observations:e.target.value})}
-          placeholder="Remarques..." style={inputStyle}/>
-      </Field>
+      {/* Valider */}
+      <button onClick={handleValider} disabled={saving||(!litige?false:!raison)}
+        style={{width:"100%",marginTop:10,padding:"10px",borderRadius:10,cursor:"pointer",
+          fontWeight:700,fontSize:13,border:"none",
+          background:saving?"#ccc":litige?C.redText:C.green,
+          color:"#fff",transition:"all 0.12s"}}>
+        {saving?"...":(litige?"📋 Valider + créer litige →":"✅ Valider →")}
+      </button>
+    </div>
+  );
+}
 
-      <div style={{display:"flex",gap:8,marginTop:4}}>
-        <button onClick={onCancel}
-          style={{padding:"10px 18px",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,
-            border:`1.5px solid ${C.goldBorder}`,background:C.white,color:C.textMuted}}>
-          Annuler
-        </button>
-        <button onClick={()=>onSubmit(ctrl,decision,ncType,raison,pct)}
-          disabled={!canSubmit}
-          style={{flex:1,padding:"11px",borderRadius:12,cursor:canSubmit?"pointer":"not-allowed",
-            fontWeight:700,fontSize:14,border:"none",
-            background:canSubmit?C.gold:"#e5e7eb",
-            color:canSubmit?"#fff":"#9ca3af",transition:"all 0.12s"}}>
-          {decision==="conforme"?"✅ Valider et archiver →":"📋 Créer rapport + litige →"}
-        </button>
+// ── FOURNISSEUR BLOCK ─────────────────────────────────────────────────────────
+function FournisseurBlock({ fournisseur, produits, onValidate, onDelete }) {
+  const [open, setOpen] = useState(true);
+  const nb = produits.length;
+  return (
+    <div style={{background:C.white,borderRadius:14,marginBottom:10,overflow:"hidden",
+      boxShadow:"0 2px 12px rgba(0,0,0,0.06)"}}>
+      <div onClick={()=>setOpen(!open)}
+        style={{padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",
+          cursor:"pointer",background:C.goldLight,borderBottom:open?`1px solid ${C.goldBorder}`:"none"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:16}}>🏭</span>
+          <span style={{fontWeight:700,fontSize:14,color:C.text}}>{fournisseur}</span>
+          <span style={{fontSize:12,background:C.amber,color:C.amberText,padding:"2px 8px",
+            borderRadius:20,fontWeight:600}}>{nb} article{nb>1?"s":""}</span>
+        </div>
+        <span style={{fontSize:18,color:C.gold,fontWeight:700,
+          transform:open?"rotate(90deg)":"none",transition:"transform 0.2s",display:"inline-block"}}>›</span>
       </div>
+      {open&&(
+        <div style={{padding:"12px 14px"}}>
+          {produits.map(a=>(
+            <ProduitRow key={a.id} arrivage={a} onValidate={onValidate} onDelete={onDelete}/>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── DATE BLOCK ────────────────────────────────────────────────────────────────
+function DateBlock({ date, arrivages, onValidate, onDelete }) {
+  const [open, setOpen] = useState(true);
+  const byFournisseur = {};
+  arrivages.forEach(a=>{
+    if(!byFournisseur[a.fournisseur]) byFournisseur[a.fournisseur]=[];
+    byFournisseur[a.fournisseur].push(a);
+  });
+  return (
+    <div style={{marginBottom:16}}>
+      <div onClick={()=>setOpen(!open)}
+        style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,cursor:"pointer",userSelect:"none"}}>
+        <span style={{fontSize:13,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.5px"}}>
+          📅 {date}
+        </span>
+        <span style={{fontSize:12,background:C.amber,color:C.amberText,padding:"2px 8px",
+          borderRadius:20,fontWeight:600}}>{arrivages.length} en attente</span>
+        <span style={{fontSize:16,color:C.amberText,marginLeft:"auto",
+          transform:open?"rotate(90deg)":"none",transition:"transform 0.2s",display:"inline-block"}}>›</span>
+      </div>
+      {open&&Object.entries(byFournisseur).map(([f,produits])=>(
+        <FournisseurBlock key={f} fournisseur={f} produits={produits} onValidate={onValidate} onDelete={onDelete}/>
+      ))}
     </div>
   );
 }
@@ -696,48 +766,25 @@ export default function App() {
 
           {/* Liste en attente */}
           {filteredEA.length>0&&<>
-            <p style={{fontWeight:700,fontSize:12,color:C.amberText,margin:"0 0 10px",
+            <p style={{fontWeight:700,fontSize:12,color:C.amberText,margin:"0 0 12px",
               textTransform:"uppercase",letterSpacing:"0.8px"}}>
               ⏳ En attente d'agrément · {filteredEA.length}
             </p>
-            {filteredEA.map(a=>(
-              <div key={a.id} style={{background:C.white,borderRadius:16,boxShadow:"0 2px 16px rgba(0,0,0,0.06)",
-                marginBottom:10,overflow:"hidden",borderLeft:`4px solid ${C.amberText}`}}>
-                <div onClick={()=>setExpandedId(expandedId===a.id?null:a.id)}
-                  style={{padding:"14px 18px",display:"flex",justifyContent:"space-between",
-                    alignItems:"center",cursor:"pointer",userSelect:"none"}}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <p style={{margin:"0 0 6px",fontWeight:700,fontSize:14,color:C.text,
-                      whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                      {a.produit}{a.variete?` · ${a.variete}`:""}
-                    </p>
-                    <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                      <Pill>🏭 {a.fournisseur}</Pill>
-                      <Pill>📦 {a.quantite} {a.unite}</Pill>
-                      {a.lot_interne&&<Pill>🔖 {a.lot_interne}</Pill>}
-                      {a.origine&&<Pill>🌍 {a.origine}</Pill>}
-                      <span style={{fontSize:11,color:C.textMuted,alignSelf:"center"}}>📅 {a.date}</span>
-                    </div>
-                  </div>
-                  <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,marginLeft:10}}>
-                    <Badge status="en attente"/>
-                    <button onClick={e=>{e.stopPropagation();deleteArrivage(a.id);}}
-                      style={{background:"transparent",border:`1px solid ${C.redBorder}`,
-                        color:C.redText,borderRadius:8,padding:"3px 7px",cursor:"pointer",fontSize:12}}>🗑</button>
-                    <span style={{fontSize:18,color:C.gold,fontWeight:700,
-                      transform:expandedId===a.id?"rotate(90deg)":"none",
-                      transition:"transform 0.2s",display:"inline-block"}}>›</span>
-                  </div>
-                </div>
-                {expandedId===a.id&&(
-                  <AgrémentPanel
-                    arrivage={a}
-                    onSubmit={(ctrl,dec,type,raison,pct)=>handleAgrement(a,ctrl,dec,type,raison,pct)}
-                    onCancel={()=>setExpandedId(null)}
-                  />
-                )}
-              </div>
-            ))}
+            {(()=>{
+              const byDate={};
+              filteredEA.forEach(a=>{
+                const d=a.date||"—";
+                if(!byDate[d]) byDate[d]=[];
+                byDate[d].push(a);
+              });
+              return Object.entries(byDate)
+                .sort((a,b)=>b[0].localeCompare(a[0]))
+                .map(([date,arr])=>(
+                  <DateBlock key={date} date={date} arrivages={arr}
+                    onValidate={(a,ctrl,dec,type,raison,pct)=>handleAgrement(a,ctrl,dec,type,raison,pct)}
+                    onDelete={deleteArrivage}/>
+                ));
+            })()}
           </>}
 
           {filteredEA.length===0&&enAttente.length===0&&(
