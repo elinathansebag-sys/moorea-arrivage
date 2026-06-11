@@ -385,19 +385,39 @@ export default function App() {
         const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
         const arr=[];
         const now=new Date();
+        let curLot="", curFournisseur="", curDate=now.toLocaleDateString("fr-FR");
         for(const row of rows){
-          const colB=String(row[1]||"").trim();
-          const colC=String(row[2]||"").trim();
-          const colD=String(row[3]||"").trim();
-          const colE=String(row[4]||"").trim();
-          const colA=String(row[0]||"").trim();
-          if(colB&&colC&&/^\d+$/.test(colD)){
+          const col0=String(row[0]||"").trim();
+          const col1=String(row[1]||"").trim();
+          const col2=String(row[2]||"").trim();
+          const col3=String(row[3]||"").trim();
+          const col7=String(row[7]||"").trim();
+          const col9=String(row[9]||"").trim();
+          // Ligne de lot : col0="Lot", col1=numéro, col2="Fournisseur", col3=nom, col7="Date arrivée", col9=date
+          if(col0==="Lot" && col1){
+            curLot=col1;
+            if(col2==="Fournisseur") curFournisseur=col3.toUpperCase();
+            if(col7==="Date arrivée" && col9){
+              try {
+                const d=new Date(col9);
+                curDate=isNaN(d)?curDate:d.toLocaleDateString("fr-FR");
+              } catch(e){}
+            }
+          }
+          // Ligne produit : col0 = SL numérique (01,02...), col1=code article, col2=libellé, col4=nb colis
+          const nbColis=parseInt(row[4]||0);
+          if(/^0\d$/.test(col0) && col1 && col2 && nbColis>0){
             arr.push({
-              fournisseur:colB.toUpperCase(), produit:colC,
-              lot_interne:colA||"", lot_fournisseur:"",
-              quantite:parseInt(colD)||0, unite:"colis",
-              poids_net:colE||"", origine:"", variete:"",
-              date:now.toLocaleDateString("fr-FR"), timestamp:Date.now(),
+              fournisseur:curFournisseur||col1.toUpperCase(),
+              produit:col2,
+              lot_interne:curLot||"",
+              lot_fournisseur:"",
+              quantite:nbColis,
+              unite:"colis",
+              poids_net:String(row[10]||""),
+              origine:"", variete:"",
+              date:curDate,
+              timestamp:Date.now(),
             });
           }
         }
