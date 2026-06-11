@@ -367,9 +367,118 @@ export default function App() {
   };
 
   // ── EXCEL IMPORT ──────────────────────────────────────────────────────────
+  // ── PARSER COMMUN ────────────────────────────────────────────────────────
+  const parseGeslotRows = (rows, now) => {
+    const arr=[];
+    let curLot="", curFournisseur="", curDate=now.toLocaleDateString("fr-FR");
+    for(const row of rows){
+      const col0=String(row[0]||"").trim();
+      const col1=String(row[1]||"").trim();
+      const col2=String(row[2]||"").trim();
+      const col3=String(row[3]||"").trim();
+      const col7=String(row[7]||"").trim();
+      const col9=String(row[9]||"").trim();
+      if(col0==="Lot" && col1){
+        curLot=col1;
+        if(col2==="Fournisseur") curFournisseur=col3.toUpperCase();
+        if(col7==="Date arrivée" && col9){
+          try { const d=new Date(col9); curDate=isNaN(d)?curDate:d.toLocaleDateString("fr-FR"); } catch(e){}
+        }
+      }
+      const nbColis=parseInt(row[4]||0);
+      if(/^0[0-9]$/.test(col0) && col1 && col2 && nbColis>0){
+        arr.push({
+          fournisseur:curFournisseur||"",
+          produit:col2, lot_interne:curLot||"", lot_fournisseur:"",
+          quantite:nbColis, unite:"colis",
+          poids_net:String(row[10]||""), origine:"", variete:"",
+          date:curDate, timestamp:Date.now(),
+        });
+      }
+    }
+    return arr;
+  };
+
+  // ── PARSER PDF GESLOT ────────────────────────────────────────────────────
+  const parseGeslotPDF = (text) => {
+    const arr=[];
+    const now=new Date();
+    let curLot="", curFournisseur="", curDate=now.toLocaleDateString("fr-FR");
+    const lines=text.split("\n").map(l=>l.trim()).filter(Boolean);
+    for(let i=0;i<lines.length;i++){
+      const line=lines[i];
+      // Lot line: "Lot 26064412 Fournisseur 1473 GREENYARD FRESH Date arrivée 11/06/2026"
+      const lotMatch=line.match(/Lot\s+(\d+)\s+Fournisseur\s+\d+\s+(.+?)\s+Date arriv[eé]e\s+(\d{2}\/\d{2}\/\d{4})/i);
+      if(lotMatch){
+        curLot=lotMatch[1];
+        curFournisseur=lotMatch[2].trim().toUpperCase();
+        curDate=lotMatch[3];
+        continue;
+      }
+      // Produit line: "01 CODE LIBELLE NB_COLIS ..."
+      // Format: SL(01-99) CODE LIBELLE NB_COLIS NB_PIECES? POIDS...
+      const prodMatch=line.match(/^(\d{2})\s+(\S+)\s+(.+?)\s+(\d+)\s+/);
+      if(prodMatch){
+        const sl=prodMatch[1];
+        const nbColis=parseInt(prodMatch[4]);
+        if(parseInt(sl)>=1 && parseInt(sl)<=99 && nbColis>0){
+          // Libellé = tout ce qui est entre code et nombre de colis
+          const libelle=prodMatch[3].trim();
+          if(libelle.length>3){
+            arr.push({
+              fournisseur:curFournisseur||"",
+              produit:libelle, lot_interne:curLot||"", lot_fournisseur:"",
+              quantite:nbColis, unite:"colis",
+              poids_net:"", origine:"", variete:"",
+              date:curDate, timestamp:Date.now(),
+            });
+          }
+        }
+      }
+    }
+    return arr;
+  };
+
   const handleExcel = (e)=>{
     const file = e.target.files[0]; if(!file) return;
     setImporting(true);
+    const now = new Date();
+
+    // ── PDF ──
+    if(file.name.endsWith(".pdf")){
+      const loadPDFJS = ()=>new Promise((res,rej)=>{
+        if(window.pdfjsLib){res(window.pdfjsLib);return;}
+        const s=document.createElement("script");
+        s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+        s.onload=()=>{
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+          res(window.pdfjsLib);
+        };
+        s.onerror=rej;
+        document.head.appendChild(s);
+      });
+      const reader=new FileReader();
+      reader.onload=async(evt)=>{
+        try{
+          const pdfjsLib=await loadPDFJS();
+          const pdf=await pdfjsLib.getDocument({data:evt.target.result}).promise;
+          let fullText="";
+          for(let p=1;p<=pdf.numPages;p++){
+            const page=await pdf.getPage(p);
+            const tc=await page.getTextContent();
+            fullText+=tc.items.map(i=>i.str).join(" ")+"\n";
+          }
+          const arr=parseGeslotPDF(fullText);
+          if(arr.length===0){showToast("Aucun arrivage détecté dans le PDF","err");setImporting(false);return;}
+          setPreview(arr); setImporting(false);
+        } catch(err){showToast("Erreur lecture PDF","err");setImporting(false);}
+      };
+      reader.readAsArrayBuffer(file);
+      e.target.value="";
+      return;
+    }
+
+    // ── XLSX ──
     const reader = new FileReader();
     reader.onload = (evt)=>{
       const loadXLSX = ()=>new Promise((res,rej)=>{
@@ -383,44 +492,7 @@ export default function App() {
         const wb=XLSX.read(evt.target.result,{type:"array"});
         const ws=wb.Sheets[wb.SheetNames[0]];
         const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
-        const arr=[];
-        const now=new Date();
-        let curLot="", curFournisseur="", curDate=now.toLocaleDateString("fr-FR");
-        for(const row of rows){
-          const col0=String(row[0]||"").trim();
-          const col1=String(row[1]||"").trim();
-          const col2=String(row[2]||"").trim();
-          const col3=String(row[3]||"").trim();
-          const col7=String(row[7]||"").trim();
-          const col9=String(row[9]||"").trim();
-          // Ligne de lot : col0="Lot", col1=numéro, col2="Fournisseur", col3=nom, col7="Date arrivée", col9=date
-          if(col0==="Lot" && col1){
-            curLot=col1;
-            if(col2==="Fournisseur") curFournisseur=col3.toUpperCase();
-            if(col7==="Date arrivée" && col9){
-              try {
-                const d=new Date(col9);
-                curDate=isNaN(d)?curDate:d.toLocaleDateString("fr-FR");
-              } catch(e){}
-            }
-          }
-          // Ligne produit : col0 = SL numérique (01,02...), col1=code article, col2=libellé, col4=nb colis
-          const nbColis=parseInt(row[4]||0);
-          if(/^0\d$/.test(col0) && col1 && col2 && nbColis>0){
-            arr.push({
-              fournisseur:curFournisseur||col1.toUpperCase(),
-              produit:col2,
-              lot_interne:curLot||"",
-              lot_fournisseur:"",
-              quantite:nbColis,
-              unite:"colis",
-              poids_net:String(row[10]||""),
-              origine:"", variete:"",
-              date:curDate,
-              timestamp:Date.now(),
-            });
-          }
-        }
+        const arr=parseGeslotRows(rows,now);
         if(arr.length===0){showToast("Aucun arrivage détecté","err");setImporting(false);return;}
         setPreview(arr); setImporting(false);
       }).catch(()=>{showToast("Erreur lecture Excel","err");setImporting(false);});
@@ -575,7 +647,7 @@ export default function App() {
             <label style={{padding:"10px 18px",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,
               border:`1.5px solid ${C.goldBorder}`,background:C.white,color:C.text,display:"inline-block"}}>
               📊 Import Excel
-              <input type="file" accept=".xlsx,.xls" onChange={handleExcel} style={{display:"none"}}/>
+              <input type="file" accept=".xlsx,.xls,.pdf" onChange={handleExcel} style={{display:"none"}}/>
             </label>
             <button onClick={()=>setHorsListeMode(true)}
               style={{padding:"10px 18px",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,
